@@ -1,7 +1,7 @@
 package service
 
 import (
-	"fmt"
+	"time"
 	"context"
 	"sync"
 	//"encoding/json"
@@ -16,7 +16,6 @@ import (
 	go_core_http 		"github.com/eliezerraj/go-core/v2/http"
 	go_core_db_pg 		"github.com/eliezerraj/go-core/v2/database/postgre"
 	go_core_otel_trace 	"github.com/eliezerraj/go-core/v2/otel/trace"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var tracerProvider go_core_otel_trace.TracerProvider
@@ -81,23 +80,42 @@ func (s * WorkerService) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-func (s *WorkerService) Clearance(ctx context.Context) error {
+func (s *WorkerService) ClearanceReconciliacion(ctx context.Context, reconciliation *model.Reconciliation) error {
 	// trace and log
-	ctx, span := tracerProvider.SpanCtx(ctx, "service.Clearance")
-	defer span.End()
-
 	s.logger.Info().
 			Ctx(ctx).
-			Str("func","Clearance").Send()
+			Str("func","ClearanceReconciliacion").Send()
 
-	spanCtx := trace.SpanContextFromContext(ctx)
-	if spanCtx.IsValid() {
-		// Add the OTel Trace ID and Span ID fields to the log event
-		//fmt.Printf("===> TraceID: %d \n", spanCtx.TraceID().String())
-		//fmt.Printf("===> SpanID: %d \n", spanCtx.SpanID().String())
-		fmt.Println("traceID", spanCtx.TraceID().String())
-		fmt.Println("spanID", spanCtx.SpanID().String())
+	ctx, span := tracerProvider.SpanCtx(ctx, "service.ClearanceReconciliacion")
+	defer span.End()
+
+	// prepare database
+	tx, conn, err := s.workerRepository.DatabasePG.StartTx(ctx)
+	if err != nil {
+		return err
 	}
 
+	// handle connection
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		} else {
+			tx.Commit(ctx)
+		}
+		s.workerRepository.DatabasePG.ReleaseTx(conn)
+		span.End()
+	}()
+
+	// prepare data
+	now := time.Now()
+	reconciliation.CreatedAt = now
+	reconciliation.Status = "CLEARANCE:RECEIVED"									   
+
+	// Create payment
+	_, err = s.workerRepository.ClearanceReconciliacion(ctx, tx, reconciliation)
+	if err != nil {
+		return err
+	}
+	
 	return nil
 }

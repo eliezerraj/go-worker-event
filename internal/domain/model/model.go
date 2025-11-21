@@ -66,12 +66,28 @@ type Payment struct {
 }
 
 type Order struct {
-	ID		int	`json:"id,omitempty"`	
+	ID			int		`json:"id,omitempty"`
+	Status		string 	`json:"status,omitempty"`
+	Currency	string 	`json:"currency,omitempty"`
+	Amount		float64 `json:"amount,omitempty"`
 }
 
 type Event struct{
 	ID			string		`json:"event_id,omitempty"`
 	Type		string		`json:"event_type,omitempty"`
-	EventAt		time.Time 		`json:"event_date,omitempty"`
-	EventData	interface {}	`json:"event_data,omitempty"`
+	EventAt		time.Time 	`json:"event_date,omitempty"`
+	EventData	interface {} `json:"event_data,omitempty"`
+}
+
+type Reconciliation struct {
+	ID			int			`json:"id,omitempty"`
+	Payment		*Payment	`json:"payment,omitempty"`
+	Order		*Order		`json:"order,omitempty"`
+	Transaction string		`json:"transaction_id,omitempty"`
+	Type		string 		`json:"reconciliacion_type,omitempty"`
+	Status		string 		`json:"reconciliacion_status,omitempty"`
+	Currency	string 		`json:"reconciliacion_currency,omitempty"`
+	Amount		float64 	`json:"reconciliacion_amount,omitempty"`
+	CreatedAt	time.Time 	`json:"created_at,omitempty"`
+	UpdatedAt	*time.Time 	`json:"update_at,omitempty"`	
 }

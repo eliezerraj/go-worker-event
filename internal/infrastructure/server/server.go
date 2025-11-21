@@ -101,6 +101,7 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 		e.logger.Info().Interface("msg", msg).Send()
 		e.logger.Info().Msg("=============== END - MSG FROM KAFKA - END ==================")
 
+		// otel trace
 		kafkaHeaderCarrier := go_core_otel_trace.KafkaHeaderCarrier{}
 		kafkaHeaders := kafkaHeaderCarrier.MapToKafkaHeaders(*msg.Header)
 		appCarrier := go_core_otel_trace.KafkaHeaderCarrier{Headers: &kafkaHeaders }
@@ -111,16 +112,52 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 
 		// Decode payload
 		event := model.Event{}
-		json.Unmarshal([]byte(msg.Payload), &event)
+		errUnMarshall := json.Unmarshal([]byte(msg.Payload), &event)
+		if errUnMarshall != nil {
+			e.logger.Error().
+					 Ctx(ctx).
+					 Err(errUnMarshall).Send()
+			continue
+		}
 
 		// call service
 		var err error
 		if event.Type == "cleareance.order" {
-			err = e.workerService.Clearance(ctx,)
+			
+			// convert interface to bytes
+			paymentBytes, errUnMarshall := json.Marshal(event.EventData)
+			if errUnMarshall != nil {
+				e.logger.Error().
+						Ctx(ctx).
+						Err(errUnMarshall).Send()
+				continue
+			}
+
+			// convert bytes to struct
+			payment := model.Payment{}
+			errUnMarshall = json.Unmarshal(paymentBytes, &payment)
+			if errUnMarshall != nil {
+				e.logger.Error().
+						Ctx(ctx).
+						Err(errUnMarshall).Send()
+				continue
+			}
+
+			reconciliation := model.Reconciliation{ Transaction: payment.Transaction,
+													Type: "WAITING:ORDER",
+													Payment: &payment,
+													Order: payment.Order }	
+
+			e.logger.Info().
+					 Ctx(ctx).
+					 Interface("reconciliation",reconciliation).Send()
+
+			err = e.workerService.ClearanceReconciliacion(ctx, &reconciliation)
 			if err != nil {
 				e.logger.Error().
 						Ctx(ctx).
 						Err(err).Send()
+				continue
 			}
 		}
 
