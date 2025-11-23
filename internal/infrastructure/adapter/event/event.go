@@ -60,6 +60,7 @@ func NewWorkerEventTX(ctx context.Context,
 // Above destroy ans create a new producer in case of failed abort
 func (w *WorkerEvent) DestroyWorkerEventProducerTx(ctx context.Context) (error) {
 	w.logger.Info().
+			Ctx(ctx).
 			Str("func","DestroyWorkerEventProducerTx").Send()
 
 	//trace
@@ -72,7 +73,8 @@ func (w *WorkerEvent) DestroyWorkerEventProducerTx(ctx context.Context) (error) 
 															  w.logger)
 	if err != nil {
 		w.logger.Error().
-			Err(err).Send()
+				Ctx(ctx).
+				Err(err).Send()
 		return err
 	}
 
@@ -92,6 +94,7 @@ func (w *WorkerEvent) DestroyWorkerEventProducerTx(ctx context.Context) (error) 
 // About close producer connection kafka
 func (w *WorkerEvent) Close(ctx context.Context){
 	w.logger.Info().
+			Ctx(ctx).
 			Str("func","Close").Send()
 	
 			w.ProducerWorker.Close()

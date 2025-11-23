@@ -55,6 +55,7 @@ func NewWorkerService(appServer	*model.AppServer,
 // About database stats
 func (s *WorkerService) Stat(ctx context.Context) (go_core_db_pg.PoolStats){
 	s.logger.Info().
+			Ctx(ctx).
 			Str("func","Stat").Send()
 
 	return s.workerRepository.Stat(ctx)
@@ -63,17 +64,25 @@ func (s *WorkerService) Stat(ctx context.Context) (go_core_db_pg.PoolStats){
 // About check health service
 func (s * WorkerService) HealthCheck(ctx context.Context) error {
 	s.logger.Info().
+			Ctx(ctx).
 			Str("func","HealthCheck").Send()
 
+	ctx, span := tracerProvider.SpanCtx(ctx, "service.HealthCheck")
+	defer span.End()
+
 	// Check database health
+	_, spanDB := tracerProvider.SpanCtx(ctx, "DatabasePG.Ping")
 	err := s.workerRepository.DatabasePG.Ping()
 	if err != nil {
 		s.logger.Error().
+				Ctx(ctx).
 				Err(err).Msg("*** Database HEALTH FAILED ***")
 		return erro.ErrHealthCheck
 	}
+	spanDB.End()
 
 	s.logger.Info().
+			Ctx(ctx).
 			Str("func","HealthCheck").
 			Msg("*** Database HEALTH SUCCESSFULL ***")
 
