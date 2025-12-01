@@ -3,7 +3,7 @@ module github.com/go-worker-event
 go 1.23.3
 
 require (
-	github.com/eliezerraj/go-core v1.0.94
+	github.com/eliezerraj/go-core v1.0.95
 	github.com/gorilla/mux v1.8.1
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
