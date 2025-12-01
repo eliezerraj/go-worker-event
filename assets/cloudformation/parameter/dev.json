@@ -18,5 +18,9 @@
   {
     "ParameterKey": "ServiceAccountName",
     "ParameterValue": "sa-go-event"
+  },
+    {
+    "ParameterKey": "RoleName",
+    "ParameterValue": "GoCWorkerEvent"
   }
 ]
