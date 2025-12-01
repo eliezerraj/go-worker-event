@@ -1,0 +1,21 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: &component-name keda-auth-go-worker-event
+  namespace: test-a
+  labels:
+    app: *component-name
+spec:
+  secretTargetRef:
+  - parameter: username
+    name: es-msk-go-worker-event
+    key: username
+  - parameter: password
+    name: es-msk-go-worker-event
+    key: password
+  - parameter: sasl
+    name: es-msk-go-worker-event
+    key: sasl
+  - parameter: tls
+    name: es-msk-go-worker-event
+    key: tls

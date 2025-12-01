@@ -1,0 +1,55 @@
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: arch-eks-01-02-otel
+spec:
+  mode: deployment 
+  serviceAccount: adot-collector 
+  
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    exporters:
+      otlphttp/loki:
+        endpoint: "http://loki:3100/otlp"
+      otlp:
+        endpoint: "grafana.architecture.caradhras.io:4317" 
+        tls:
+          insecure: true
+      otlp/tempo-all:
+        endpoint: "http://grafana.architecture.caradhras.io:4318"
+        tls:
+          insecure: true
+      prometheusremotewrite:
+        endpoint: "grafana.architecture.caradhras.io:8889/api/v1/write"
+    processors:
+      resource:
+        attributes:
+          - key: k8s.cluster.name
+            value: local-go-app
+            action: insert
+          - key: otel.resource.deployment.environment
+            value: dev-compose
+            action: insert
+      batch:
+        send_batch_size: 1000
+        timeout: 10s
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlphttp/loki]
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheusremotewrite]
