@@ -12,9 +12,10 @@ import(
 
 	"github.com/go-worker-event/shared/log"
 	"github.com/go-worker-event/internal/domain/model"
-	//"github.com/go-worker-event/internal/infrastructure/adapter/http"
+	"github.com/go-worker-event/internal/infrastructure/adapter/http"
 	"github.com/go-worker-event/internal/infrastructure/adapter/event"
 	"github.com/go-worker-event/internal/infrastructure/server"
+	"github.com/go-worker-event/internal/infrastructure/server/server_http"
 	"github.com/go-worker-event/internal/infrastructure/config"
 	"github.com/go-worker-event/internal/infrastructure/repo/database"
 	"github.com/go-worker-event/internal/domain/service"
@@ -177,12 +178,9 @@ func main (){
 											  workerEventProducer,
 											  &appLogger)
 
-	/*httpRouters := http.NewHttpRouters(&appServer,
+	httpRouters := http.NewHttpRouters(&appServer,
 									   workerService,
 									   &appLogger)
-
-	httpServer := server.NewHttpAppServer(&appServer,
-										  &appLogger,)*/
 
 	// Services/dependevies health check
 	err = workerService.HealthCheck(ctx)
@@ -231,16 +229,21 @@ func main (){
 				Err(err).Send()
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go eventServer.Consumer(ctx, &wg)
-	wg.Wait()
+	// start event consumer and http server
+	var wg_event, wg_http sync.WaitGroup
+	
+	wg_event.Add(1)
+	go eventServer.Consumer(ctx, &wg_event)
+	
+	// start http server for metrics and health
+	wg_http.Add(1)
+	httpServer := server_http.NewHttpAppServer(&appServer,
+										  	   &appLogger,)
 
-	// start http server
-	/*httpServer.StartHttpAppServer(ctx, 
-								  	httpRouters,)*/
-	//_ = httpServer
-	//_ = httpRouters
+	httpServer.StartHttpAppServer(ctx, 
+								  httpRouters,
+								  &wg_http,)
 
-	// Start consumer worker	
+	wg_event.Wait()
+	wg_http.Wait()
 }
