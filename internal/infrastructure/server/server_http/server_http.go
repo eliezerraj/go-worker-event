@@ -1,8 +1,9 @@
-package server
+package server_http
 
 import(
 	"os"
 	"time"
+	"sync"
 	"strconv"
 	"context"
 	"net/http"
@@ -30,7 +31,7 @@ type HttpAppServer struct {
 func NewHttpAppServer(	appServer *model.AppServer,
 						appLogger *zerolog.Logger) HttpAppServer {
 	logger := appLogger.With().
-						Str("package", "infrastructure.server").
+						Str("package", "infrastructure.server.server_http").
 						Logger()
 	
 	logger.Info().
@@ -45,9 +46,12 @@ func NewHttpAppServer(	appServer *model.AppServer,
 // About start server http
 func (h *HttpAppServer) StartHttpAppServer(	ctx context.Context, 
 											appHttpRouters app_http_routers.HttpRouters,
-											) {
+											wg *sync.WaitGroup,) {
 	h.logger.Info().
 			Str("func","StartHttpAppServer").Send()
+
+	
+	defer wg.Done()
 
 	appRouter := mux.NewRouter().StrictSlash(true)
 

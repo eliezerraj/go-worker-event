@@ -75,6 +75,7 @@ func NewEventAppServer(	appServer *model.AppServer,
 	}, nil
 }
 
+// About consume messages from kafka
 func (e *EventAppServer) Consumer(ctx context.Context,
 								  wg *sync.WaitGroup) {
 	e.logger.Info().
