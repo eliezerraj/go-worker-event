@@ -39,9 +39,6 @@
 		{
 			"name": "py-mcp-server",
 			"path": "../../../../py-mcp-server"
-		},
-		{
-			"path": "../../../../go-card"
 		}
 	],
 	"settings": {}

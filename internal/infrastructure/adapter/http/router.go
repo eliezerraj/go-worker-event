@@ -118,14 +118,14 @@ func (h *HttpRouters) Info(rw http.ResponseWriter, req *http.Request) {
 										time.Duration(h.appServer.Server.CtxTimeout) * time.Second)
     defer cancel()
 
-	// trace	
-	ctx, span := tracerProvider.SpanCtx(ctx, "adapter.http.Info")
-	defer span.End()
-
 	// log with context
 	h.logger.Info().
 			Ctx(ctx).
 			Str("func","Info").Send()
+
+	// trace	
+	ctx, span := tracerProvider.SpanCtx(ctx, "adapter.http.Info")
+	defer span.End()
 
 	json.NewEncoder(rw).Encode(h.appServer)
 }

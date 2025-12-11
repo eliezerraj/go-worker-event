@@ -50,7 +50,6 @@ func (h *HttpAppServer) StartHttpAppServer(	ctx context.Context,
 	h.logger.Info().
 			Str("func","StartHttpAppServer").Send()
 
-	
 	defer wg.Done()
 
 	appRouter := mux.NewRouter().StrictSlash(true)
