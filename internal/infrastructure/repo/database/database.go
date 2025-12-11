@@ -63,13 +63,13 @@ func (w *WorkerRepository) Stat(ctx context.Context) (go_core_db_pg.PoolStats){
 func (w* WorkerRepository) ClearanceReconciliacion(ctx context.Context, 
 													tx pgx.Tx, 
 													reconciliation *model.Reconciliation) (*model.Reconciliation, error){
-	// trace
-	ctx, span := tracerProvider.SpanCtx(ctx, "database.ClearanceReconciliacion")
-	defer span.End()
-
 	w.logger.Info().
 			Ctx(ctx).
 			Str("func","ClearanceReconciliacion").Send()
+			
+	// trace
+	ctx, span := tracerProvider.SpanCtx(ctx, "database.ClearanceReconciliacion")
+	defer span.End()
 
 	conn, err := w.DatabasePG.Acquire(ctx)
 	if err != nil {
