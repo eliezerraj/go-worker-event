@@ -1,0 +1,48 @@
+{
+	"folders": [
+		{
+			"name": "go-core",
+			"path": "../../../../go-core"
+		},
+		{
+			"name": "go-inventory",
+			"path": "../../../../go-inventory"
+		},
+		{
+			"name": "go-order",
+			"path": "../../../../go-order"
+		},
+		{
+			"name": "go-worker-event",
+			"path": "../../.."
+		},
+		{
+			"name": "go-cart",
+			"path": "../../../../go-cart"
+		},
+		{
+			"name": "go-clearance",
+			"path": "../../../../go-clearance"
+		},
+		{
+			"name": "py-mcp-server-go-ecommerce",
+			"path": "../../../../py-mcp-server-go-ecommerce"
+		},
+		{
+			"name": "lambda-go-identidy",
+			"path": "../../../../lambda-go-identidy"
+		},
+		{
+			"name": "lambda-go-oauth2",
+			"path": "../../../../lambda-go-oauth2"
+		},
+		{
+			"name": "py-mcp-server",
+			"path": "../../../../py-mcp-server"
+		},
+		{
+			"path": "../../../../go-card"
+		}
+	],
+	"settings": {}
+}

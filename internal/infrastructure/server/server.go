@@ -7,6 +7,7 @@ import(
 	"github.com/google/uuid"
 
 	"github.com/rs/zerolog"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 
 	go_core_event "github.com/eliezerraj/go-core/v2/event/kafka" 
 	go_core_otel_trace 	"github.com/eliezerraj/go-core/v2/otel/trace"
@@ -103,9 +104,9 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 		e.logger.Info().Msg("=============== END - MSG FROM KAFKA - END ==================")
 
 		// otel trace
-		kafkaHeaderCarrier := go_core_otel_trace.KafkaHeaderCarrier{}
+		kafkaHeaderCarrier := KafkaHeaderCarrier{}
 		kafkaHeaders := kafkaHeaderCarrier.MapToKafkaHeaders(*msg.Header)
-		appCarrier := go_core_otel_trace.KafkaHeaderCarrier{Headers: &kafkaHeaders }
+		appCarrier := KafkaHeaderCarrier{Headers: &kafkaHeaders }
 		ctx := otel.GetTextMapPropagator().Extract(ctx, appCarrier)
 
 		ctx, span := tracerProvider.SpanCtx(ctx, 
@@ -170,4 +171,56 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 
 		span.End()
 	}
+}
+
+// ----------------------------------------------
+// Helper kafka header OTEL
+// ----------------------------------------------
+
+type KafkaHeaderCarrier struct {
+	Headers *[]kafka.Header
+}
+
+func (c KafkaHeaderCarrier) Get(key string) string {
+	for _, h := range *c.Headers {
+		if h.Key == key {
+			return string(h.Value)
+		}
+	}
+	return ""
+}
+
+func (c KafkaHeaderCarrier) Set(key string, value string) {
+	// remove existing key
+	newHeaders := make([]kafka.Header, 0)
+	for _, h := range *c.Headers {
+		if h.Key != key {
+			newHeaders = append(newHeaders, h)
+		}
+	}
+	// append new key
+	newHeaders = append(newHeaders, kafka.Header{
+		Key:   key,
+		Value: []byte(value),
+	})
+	*c.Headers = newHeaders
+}
+
+func (c KafkaHeaderCarrier) Keys() []string {
+	keys := make([]string, 0, len(*c.Headers))
+	for _, h := range *c.Headers {
+		keys = append(keys, h.Key)
+	}
+	return keys
+}
+
+func (c KafkaHeaderCarrier) MapToKafkaHeaders(m map[string]string) []kafka.Header {
+    hdrs := make([]kafka.Header, 0, len(m))
+    for k, v := range m {
+        hdrs = append(hdrs, kafka.Header{
+            Key:   k,
+            Value: []byte(v),
+        })
+    }
+    return hdrs
 }
