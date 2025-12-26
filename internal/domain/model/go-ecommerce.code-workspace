@@ -25,20 +25,36 @@
 			"path": "../../../../go-clearance"
 		},
 		{
-			"name": "py-mcp-server-go-ecommerce",
-			"path": "../../../../py-mcp-server-go-ecommerce"
-		},
-		{
 			"name": "lambda-go-identidy",
 			"path": "../../../../lambda-go-identidy"
+		},
+		{
+			"name": "site-go",
+			"path": "../../../../site-go"
 		},
 		{
 			"name": "lambda-go-oauth2",
 			"path": "../../../../lambda-go-oauth2"
 		},
 		{
-			"name": "py-mcp-server",
-			"path": "../../../../py-mcp-server"
+			"name": "py-agent-ecommerce",
+			"path": "../../../../py-agent-ecommerce"
+		},
+		{
+			"name": "py-mcp-server-go-ecommerce",
+			"path": "../../../../py-mcp-server-go-ecommerce"
+		},
+		{
+			"name": "docker-files",
+			"path": "../../../../docker-files"
+		},
+		{
+			"name": "iaac",
+			"path": "../../../../iaac"
+		},
+		{
+			"name": "rl-rate-limit",
+			"path": "../../../../rl-rate-limit"
 		}
 	],
 	"settings": {}
