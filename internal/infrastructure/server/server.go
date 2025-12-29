@@ -45,7 +45,7 @@ func (e *EventAppServer) setContextTraceId(ctx context.Context, trace_id string)
 			Msg("Create a new trace_id !!!")
 	}
 
-	ctx = context.WithValue(ctx, "trace-request-id",  trace_id  )
+	ctx = context.WithValue(ctx, "request-id",  trace_id  )
 	return ctx
 }
 
