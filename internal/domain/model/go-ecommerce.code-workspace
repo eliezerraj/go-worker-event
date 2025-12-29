@@ -29,12 +29,12 @@
 			"path": "../../../../lambda-go-identidy"
 		},
 		{
-			"name": "site-go",
-			"path": "../../../../site-go"
-		},
-		{
 			"name": "lambda-go-oauth2",
 			"path": "../../../../lambda-go-oauth2"
+		},
+		{
+			"name": "site-go",
+			"path": "../../../../site-go"
 		},
 		{
 			"name": "py-agent-ecommerce",
@@ -55,6 +55,14 @@
 		{
 			"name": "rl-rate-limit",
 			"path": "../../../../rl-rate-limit"
+		},
+		{
+			"name": "k8-aws-role-anywhere",
+			"path": "../../../../k8-aws-role-anywhere"
+		},
+		{
+			"name": "py-memory-graph",
+			"path": "../../../../py-memory-graph"
 		}
 	],
 	"settings": {}
