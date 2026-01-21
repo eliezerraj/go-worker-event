@@ -99,7 +99,7 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 
 	for msg := range messages {
 
-		e.logger.Info().Msg("=============== BEGIN - MSG FROM KAFKA - BEGIN ==================")
+		e.logger.Info().Msg("=============== BEGIN - MSG FROM KAFKA - BEGIN =============")
 		e.logger.Info().Interface("msg", msg).Send()
 		e.logger.Info().Msg("=============== END - MSG FROM KAFKA - END ==================")
 
