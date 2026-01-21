@@ -6,14 +6,36 @@
 
    Despite the workload is a event driven there is 2 http endpoints exposed just for observability purpose (metrics). 
 
-## Integration
+## Sequence Diagram
 
-   This is workload requires a kafka cluster.
+![alt text](worker_event.png)
+
+    title worker-event
+
+    participant kafka
+    participant worker-event
+    
+    entryspacing 0.7
+    space
+    kafka<-worker-event:EVENT topic.clearance
+    worker-event->worker-event:event.type != "cleareance.order"
+    worker-event->worker-event:create clearanceReconciliacion\nreconciliation.Type = "ORDER"\nreconciliation.Status = "RECONCILIATION:RECEIVED"
 
 ## Endpoints
 
-    curl --location 'http://localhost:7007/info'
-    curl --location 'http://localhost:7007/metrics'
+curl --location 'http://localhost:7007/info'
+
+curl --location 'http://localhost:7007/metrics'
+
+## Monitoring
+
+Logs: JSON structured logging via zerolog
+
+Metrics: Available through endpoint /metrics via otel/sdk/metric
+
+Trace: The x-request-id is extract from header and is ingest into context, in order the x-request-id do not exist a new one is generated (uuid)
+
+Errors: Structured error handling with custom error types
 
 ## Enviroment variables
 

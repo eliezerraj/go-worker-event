@@ -119,7 +119,6 @@ func (s *WorkerService) ClearanceReconciliacion(ctx context.Context, reconciliat
 	now := time.Now()
 	reconciliation.CreatedAt = now
 	reconciliation.Type = "ORDER"
-	reconciliation.Status = "RECONCILIATION:RECEIVED"
 	reconciliation.Currency	= "BRL"
 	reconciliation.Amount = reconciliation.Payment.Amount - reconciliation.Order.Amount		   
 	
