@@ -16,10 +16,9 @@
     participant worker-event
     
     entryspacing 0.7
-        postData
-        queryData
     space
     kafka<-worker-event:EVENT topic.clearance
+    worker-event->worker-event:event.type != "cleareance.order"
     worker-event->worker-event:create clearanceReconciliacion\nreconciliation.Type = "ORDER"\nreconciliation.Status = "RECONCILIATION:RECEIVED"
 
 ## Endpoints

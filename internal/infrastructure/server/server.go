@@ -107,8 +107,15 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 		kafkaHeaderCarrier := KafkaHeaderCarrier{}
 		kafkaHeaders := kafkaHeaderCarrier.MapToKafkaHeaders(*msg.Header)
 		appCarrier := KafkaHeaderCarrier{Headers: &kafkaHeaders }
-		ctx := otel.GetTextMapPropagator().Extract(ctx, appCarrier)
 
+		// Extract all headers from appCarrier and add to context
+		allKeys := appCarrier.Keys()
+		for _, key := range allKeys {
+			value := appCarrier.Get(key)
+			ctx = context.WithValue(ctx, key, value)
+		}
+
+		ctx := otel.GetTextMapPropagator().Extract(ctx, appCarrier)
 		ctx, span := tracerProvider.SpanCtx(ctx, 
 								  			e.appServer.Application.Name)
 
@@ -146,7 +153,7 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 			}
 
 			reconciliation := model.Reconciliation{ Transaction: payment.Transaction,
-													Type: "WAITING:ORDER",
+													Type: "RECONCILIATION:RECEIVED",
 													Payment: &payment,
 													Order: payment.Order }	
 
