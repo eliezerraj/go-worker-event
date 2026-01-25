@@ -15,16 +15,45 @@ import(
 	"github.com/go-worker-event/internal/domain/model"
 	"github.com/go-worker-event/internal/domain/service"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel"
 )
 
-var appTracerProvider 	go_core_otel_trace.TracerProvider
-
 type EventAppServer struct {
-	appServer		*model.AppServer
-	consumerWorker 	*go_core_event.ConsumerWorker
-	workerService	*service.WorkerService
-	logger			*zerolog.Logger
+	appServer			*model.AppServer
+	consumerWorker 		*go_core_event.ConsumerWorker
+	workerService		*service.WorkerService
+	logger 				*zerolog.Logger
+	tracerProvider 		*go_core_otel_trace.TracerProvider	
+}
+
+// About create a consumer worker event
+func NewEventAppServer(	appServer *model.AppServer,
+						workerService *service.WorkerService,
+						appLogger *zerolog.Logger,
+						tracerProvider *go_core_otel_trace.TracerProvider) (*EventAppServer, error) {
+	logger := appLogger.With().
+						Str("package", "infrastructure.server").
+						Logger()
+	
+	logger.Info().
+			Str("func","NewEventAppServer").Send()
+
+	consumerWorker, err := go_core_event.NewConsumerWorker(appServer.KafkaConfigurations,
+														   &logger)	
+	if err != nil {
+		logger.Error().
+				Err(err).Send()
+		return nil, err
+	}
+
+	return &EventAppServer{
+		appServer: appServer,
+		workerService: workerService,
+		consumerWorker: consumerWorker,
+		logger: &logger,
+		tracerProvider: tracerProvider,
+	}, nil
 }
 
 // Set a trace-i inside the context
@@ -49,33 +78,6 @@ func (e *EventAppServer) setContextTraceId(ctx context.Context, trace_id string)
 	return ctx
 }
 
-// About create a consumer worker event
-func NewEventAppServer(	appServer *model.AppServer,
-						workerService *service.WorkerService,
-						appLogger *zerolog.Logger) (*EventAppServer, error) {
-	logger := appLogger.With().
-						Str("package", "infrastructure.server").
-						Logger()
-	
-	logger.Info().
-			Str("func","NewEventAppServer").Send()
-
-	consumerWorker, err := go_core_event.NewConsumerWorker(appServer.KafkaConfigurations,
-														   &logger)	
-	if err != nil {
-		logger.Error().
-				Err(err).Send()
-		return nil, err
-	}
-
-	return &EventAppServer{
-		appServer: appServer,
-		workerService: workerService,
-		consumerWorker: consumerWorker,
-		logger: &logger,
-	}, nil
-}
-
 // About consume messages from kafka
 func (e *EventAppServer) Consumer(ctx context.Context,
 								  wg *sync.WaitGroup) {
@@ -94,9 +96,8 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 
 	messages := make(chan go_core_event.Message)
 
-	go e.consumerWorker.Consumer(e.appServer.Topics, messages)
-	var tracerProvider 	go_core_otel_trace.TracerProvider
-
+	go e.consumerWorker.Consumer(*e.appServer.Topics, messages)
+	
 	for msg := range messages {
 
 		e.logger.Info().Msg("=============== BEGIN - MSG FROM KAFKA - BEGIN =============")
@@ -116,8 +117,7 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 		}
 
 		ctx := otel.GetTextMapPropagator().Extract(ctx, appCarrier)
-		ctx, span := tracerProvider.SpanCtx(ctx, 
-								  			e.appServer.Application.Name)
+		ctx, span := e.tracerProvider.SpanCtx(ctx, e.appServer.Application.Name, trace.SpanKindConsumer)
 
 		// Decode payload
 		event := model.Event{}

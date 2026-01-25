@@ -1,30 +1,30 @@
 package database
 
 import (
-		"context"
-		"errors"
-		//"database/sql"
+	"fmt"
+	"context"
 
-		"github.com/rs/zerolog"
-		"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog"
+	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel/trace"
 
-		//"github.com/go-worker-event/shared/erro"
-		"github.com/go-worker-event/internal/domain/model"
+	"github.com/go-worker-event/internal/domain/model"
 
-		go_core_otel_trace "github.com/eliezerraj/go-core/v2/otel/trace"
-		go_core_db_pg "github.com/eliezerraj/go-core/v2/database/postgre"
+	go_core_otel_trace "github.com/eliezerraj/go-core/v2/otel/trace"
+	go_core_db_pg "github.com/eliezerraj/go-core/v2/database/postgre"
 )
 
-var tracerProvider go_core_otel_trace.TracerProvider
-
+// WorkerRepository struct
 type WorkerRepository struct {
-	DatabasePG *go_core_db_pg.DatabasePGServer
-	logger		*zerolog.Logger
+	DatabasePG 		*go_core_db_pg.DatabasePGServer
+	logger			*zerolog.Logger
+	tracerProvider 	*go_core_otel_trace.TracerProvider
 }
 
 // Above new worker
 func NewWorkerRepository(databasePG *go_core_db_pg.DatabasePGServer,
-						appLogger *zerolog.Logger) *WorkerRepository{
+						appLogger *zerolog.Logger,
+						tracerProvider *go_core_otel_trace.TracerProvider) *WorkerRepository{
 	logger := appLogger.With().
 						Str("package", "repo.database").
 						Logger()
@@ -34,6 +34,7 @@ func NewWorkerRepository(databasePG *go_core_db_pg.DatabasePGServer,
 	return &WorkerRepository{
 		DatabasePG: databasePG,
 		logger: &logger,
+		tracerProvider: tracerProvider,
 	}
 }
 
@@ -68,17 +69,8 @@ func (w* WorkerRepository) ClearanceReconciliacion(ctx context.Context,
 			Str("func","ClearanceReconciliacion").Send()
 			
 	// trace
-	ctx, span := tracerProvider.SpanCtx(ctx, "database.ClearanceReconciliacion")
+	ctx, span := w.tracerProvider.SpanCtx(ctx, "database.ClearanceReconciliacion", trace.SpanKindInternal)
 	defer span.End()
-
-	conn, err := w.DatabasePG.Acquire(ctx)
-	if err != nil {
-		w.logger.Error().
-				Ctx(ctx).
-				Err(err).Send()
-		return nil, errors.New(err.Error())
-	}
-	defer w.DatabasePG.Release(conn)
 
 	//Prepare
 	var id int
@@ -124,7 +116,7 @@ func (w* WorkerRepository) ClearanceReconciliacion(ctx context.Context,
 		w.logger.Error().
 				Ctx(ctx).
 				Err(err).Send()
-		return nil, errors.New(err.Error())
+		return nil, fmt.Errorf("FAILED to scan reconciliation ID: %w", err)
 	}
 
 	// Set PK

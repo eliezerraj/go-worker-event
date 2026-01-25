@@ -13,7 +13,7 @@ import(
 	"github.com/go-worker-event/shared/log"
 	"github.com/go-worker-event/internal/domain/model"
 	"github.com/go-worker-event/internal/infrastructure/adapter/http"
-	"github.com/go-worker-event/internal/infrastructure/adapter/event"
+	//"github.com/go-worker-event/internal/infrastructure/adapter/event"
 	"github.com/go-worker-event/internal/infrastructure/server"
 	"github.com/go-worker-event/internal/infrastructure/server/server_http"
 	"github.com/go-worker-event/internal/infrastructure/config"
@@ -23,39 +23,37 @@ import(
 	go_core_otel_trace 	"github.com/eliezerraj/go-core/v2/otel/trace"
 	go_core_db_pg 		"github.com/eliezerraj/go-core/v2/database/postgre"
 
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
 
 // Global variables
-var ( 
-	appLogger 	zerolog.Logger
-	logger		zerolog.Logger
-	appServer	model.AppServer
-	appDatabasePGServer go_core_db_pg.DatabasePGServer
 
-	appInfoTrace 		go_core_otel_trace.InfoTrace
-	appTracerProvider 	go_core_otel_trace.TracerProvider
-	sdkTracerProvider 	*sdktrace.TracerProvider
-)
+// AppContext holds all application dependencies and state
+type AppContext struct {
+	Logger           zerolog.Logger
+	Server           *model.AppServer
+	Database         *go_core_db_pg.DatabasePGServer
+	TracerProvider   *go_core_otel_trace.TracerProvider
+}
 
-// About init
+// Global logger for init and main entry point only
+var initLogger zerolog.Logger
+
+// init sets up global logger for startup
 func init(){
 	// Load application info
-
 	application := config.GetApplicationInfo()
-	appServer.Application = &application
 	
 	// Log setup	
 	writers := []io.Writer{os.Stdout}
 
-	if	application.StdOutLogGroup {
+	if application.StdOutLogGroup {
 		file, err := os.OpenFile(application.LogGroup, 
 								os.O_APPEND|os.O_CREATE|os.O_WRONLY, 
 								0644)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to open log file: %v", err))
+			panic(fmt.Sprintf("FAILED to open log file: %v", err))
 		}
 		writers = append(writers, file)
 	} 
@@ -74,175 +72,220 @@ func init(){
 	}
 
 	// prepare log
-	// assign to package-level appLogger (avoid := which would shadow it)
-	appLogger = zerolog.New(multiWriter).
+	initLogger = zerolog.New(multiWriter).
 						With().
 						Timestamp().
 						Str("component", application.Name).
 						Logger().
 						Hook(log.TraceHook{}) // hook the app shared log
-
-	// set a logger
-	logger = appLogger.With().
-						Str("package", "main").
-						Logger()
-
-
-	// load configs					
-	server 		:= config.GetHttpServerEnv()
-	otelTrace 	:= config.GetOtelEnv()
-	databaseConfig := config.GetDatabaseEnv()
-	apiEndpoint := config.GetEndpointEnv() 
-	event, topics := config.GetEventKafkaEnv() 
-
-	appServer.Server = &server
-	appServer.EnvTrace = &otelTrace
-	appServer.DatabaseConfig = &databaseConfig 	
-	appServer.Endpoint = &apiEndpoint
-	appServer.KafkaConfigurations = &event
-	appServer.Topics = topics 
 }
 
-// About main
-func main (){
-	logger.Info().
-			Msgf("STARTING APP version: %s",appServer.Application.Version)
-	logger.Info().
-			Interface("appServer", appServer).Send()
+// setupAppContext initializes all application dependencies
+func setupAppContext(ctx context.Context) (*AppContext, error) {
+	logger := initLogger.With().
+				Str("package", "main").
+				Logger()
 
-	// create context and otel log provider
-	ctx, cancel := context.WithCancel(context.Background())
+	// Load all configurations with proper error handling
+	configLoader := config.NewConfigLoader(&initLogger)
+	allConfigs, err := configLoader.LoadAll()
+	if err != nil {
+		return nil, fmt.Errorf("configuration loading FAILED: %w", err)
+	}
 
+	// Build AppServer
+	appServer := &model.AppServer{
+		Application:    allConfigs.Application,
+		Server:         allConfigs.Server,
+		EnvTrace:       allConfigs.OtelTrace,
+		DatabaseConfig: allConfigs.Database,
+		KafkaConfigurations: allConfigs.Kafka,
+		Topics:         allConfigs.Topics,
+	}
+
+	// Setup OTEL tracer if enabled
+	var tracerProvider *go_core_otel_trace.TracerProvider
 	if appServer.Application.OtelTraces {
-		appInfoTrace.Name = appServer.Application.Name
-		appInfoTrace.Version = appServer.Application.Version
-		appInfoTrace.ServiceType = "k8-workload"
-		appInfoTrace.Env = appServer.Application.Env
-		appInfoTrace.Account = appServer.Application.Account
-
-		sdkTracerProvider = appTracerProvider.NewTracerProvider(ctx, 
-																*appServer.EnvTrace, 
-																appInfoTrace,
-																&appLogger)
-
-		otel.SetTextMapPropagator(propagation.TraceContext{})
-		otel.SetTracerProvider(sdkTracerProvider)
-		sdkTracerProvider.Tracer(appServer.Application.Name)
+		tracerProvider = setupTracerProvider(ctx, appServer, &logger)
 	}
 
-	// Open prepare database
-	count := 1
-	var err error
-	for {
-		appDatabasePGServer, err = appDatabasePGServer.NewDatabasePG(ctx, 
-																	*appServer.DatabaseConfig,
-																	&appLogger)									
-		if err != nil {
-			if count < 3 {
-				logger.Warn().
-						Ctx(ctx).
-						Err(err).Msg("error open database... trying again WARNING")
-			} else {
-				logger.Fatal().
-						Ctx(ctx).
-						Err(err).Msg("Fatal Error open Database ABORTING")
-				panic(err)
-			}
-			time.Sleep(3 * time.Second) //backoff
-			count = count + 1
-			continue
+	// Connect to database with retry and timeout
+	databaseServer, err := connectDatabase(ctx, *appServer.DatabaseConfig, &logger)
+	if err != nil {
+		return nil, fmt.Errorf("database connection FAILED: %w", err)
+	}
+
+	return &AppContext{
+		Logger:         logger,
+		Server:         appServer,
+		Database:       &databaseServer,
+		TracerProvider: tracerProvider,
+	}, nil
+}
+
+// setupTracerProvider initializes OpenTelemetry tracer
+func setupTracerProvider(ctx context.Context, appServer *model.AppServer, logger *zerolog.Logger) *go_core_otel_trace.TracerProvider {
+	appInfoTrace := go_core_otel_trace.InfoTrace{
+		Name:        appServer.Application.Name,
+		Version:     appServer.Application.Version,
+		ServiceType: "k8-workload",
+		Env:         appServer.Application.Env,
+		Account:     appServer.Application.Account,
+	}
+
+	tracerProvider := go_core_otel_trace.NewTracerProvider(	ctx,
+															*appServer.EnvTrace,
+															appInfoTrace,
+															logger)
+
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	otel.SetTracerProvider(tracerProvider.TracerProvider)
+
+	return tracerProvider
+}
+
+// connectDatabase establishes database connection with retry logic and timeout
+func connectDatabase(ctx context.Context, dbCfg go_core_db_pg.DatabaseConfig, logger *zerolog.Logger) (go_core_db_pg.DatabasePGServer, error) {
+	// Create context with timeout for connection attempts
+	connCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	const maxRetries = 3
+	const retryDelay = 3 * time.Second
+
+	var dbServer go_core_db_pg.DatabasePGServer
+	var lastErr error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		var err error
+		dbServer, err = dbServer.NewDatabasePG(connCtx, dbCfg, logger)
+		if err == nil {
+			logger.Info().
+				Ctx(connCtx).
+				Int("attempt", attempt).
+				Msg("connected to database SUCCESSFULL")
+			return dbServer, nil
 		}
-		break
-	}
 
-	// wire
-	workerEventProducer, err := event.NewWorkerEventTX(ctx, 
-													   appServer.Topics, 
-													   appServer.KafkaConfigurations,
-													   &appLogger)
-	if err != nil {
-		logger.Error().
-				Ctx(ctx).
+		lastErr = err
+		if attempt < maxRetries {
+			logger.Warn().
+				Ctx(connCtx).
 				Err(err).
-				Msg("Error create Kafka Producer ERROR")
-	} else {
-		logger.Info().
-				Msg("KAFKA Producer SUCCESSFULL")
+				Int("attempt", attempt).
+				Msg("FAILED to connect to database, retrying...")
+			select {
+			case <-connCtx.Done():
+				return go_core_db_pg.DatabasePGServer{}, fmt.Errorf("connection timeout after %d attempts: %w", attempt, err)
+			case <-time.After(retryDelay):
+				// Continue to next attempt
+			}
+		}
 	}
 
-	repository := database.NewWorkerRepository(&appDatabasePGServer,
-											   &appLogger)
-	
-	workerService := service.NewWorkerService(&appServer,
-											  repository,
-											  workerEventProducer,
-											  &appLogger)
+	return go_core_db_pg.DatabasePGServer{}, fmt.Errorf("FAILED to connect to database after %d attempts: %w", maxRetries, lastErr)
+}
 
-	httpRouters := http.NewHttpRouters(&appServer,
-									   workerService,
-									   &appLogger)
+// main is the application entry point
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Services/dependevies health check
-	err = workerService.HealthCheck(ctx)
+	// Initialize all dependencies
+	appCtx, err := setupAppContext(ctx)
 	if err != nil {
-		logger.Error().
-				Ctx(ctx).
-				Err(err).
-				Msg("Error health check support services ERROR")
-	} else {
-		logger.Info().
-				Ctx(ctx).
-				Msg("SERVICES HEALTH CHECK OK")
+		initLogger.Fatal().
+			Err(err).
+			Msg("FAILED to initialize application context")
 	}
 
-	// Cancel everything
+	appCtx.Logger.Info().
+		Msgf("STARTING workload version: %s", appCtx.Server.Application.Version)
+
+	appCtx.Logger.Info().
+		Interface("server", appCtx.Server).
+		Send()
+
+	// Setup graceful shutdown and cleanup
 	defer func() {
-		// cancel log provider
-		if sdkTracerProvider != nil {
-			err := sdkTracerProvider.Shutdown(ctx)
-			if err != nil{
-				logger.Error().
-						Ctx(ctx).
-						Err(err).
-						Msg("Erro to shutdown tracer provider")
+		appCtx.Logger.Info().
+			Msg("Shutting down application")
+
+		// Close database first (highest dependency)
+		appCtx.Database.CloseConnection()
+
+		// Shutdown tracer provider
+		if appCtx.TracerProvider != nil && appCtx.TracerProvider.TracerProvider != nil {
+			if err := appCtx.TracerProvider.TracerProvider.Shutdown(ctx); err != nil {
+				appCtx.Logger.Error().
+					Ctx(ctx).
+					Err(err).
+					Msg("Error shutting down tracer provider")
 			}
 		}
 
-		// cancel kafka
-		workerEventProducer.Close(ctx)
-		
-		// cancel database		
-		appDatabasePGServer.CloseConnection()
-		
-		// cancel context		
+		// Cancel context
 		cancel()
 
-		logger.Info().
-				Msgf("App %s Finalized SUCCESSFULL !!!", appServer.Application.Name)
+		appCtx.Logger.Info().
+			Msgf("workload ** %s ** shutdown completed SUCCESSFULLY", appCtx.Server.Application.Name)
 	}()
 
-	eventServer, err := server.NewEventAppServer(&appServer,
-												workerService,
-										   		&appLogger)
+	// Wire dependencies
+	repository := database.NewWorkerRepository(
+		appCtx.Database,
+		&appCtx.Logger,
+		appCtx.TracerProvider)
+
+	workerService := service.NewWorkerService(
+		repository,
+		&appCtx.Logger,
+		appCtx.TracerProvider)
+
+	httpRouters := http.NewHttpRouters(
+		appCtx.Server,
+		workerService,
+		&appCtx.Logger,
+		appCtx.TracerProvider)
+
+	httpServer := server_http.NewHttpAppServer(
+		appCtx.Server,
+		&appCtx.Logger)
+
+	eventServer, err := server.NewEventAppServer(
+		appCtx.Server, 
+		workerService, 
+		&appCtx.Logger,
+		appCtx.TracerProvider)
 	if err != nil {
-		logger.Error().
-				Err(err).Send()
+		initLogger.Fatal().
+			Err(err).
+			Msg("FAILED to initialize kafka consumer")
 	}
+
+	// Health check all dependencies
+	if err := workerService.HealthCheck(ctx); err != nil {
+		appCtx.Logger.Error().
+			Ctx(ctx).
+			Err(err).
+			Msg("Health check FAILED for support services")
+		//return // ENABLE this line to exit application
+	}
+
+	appCtx.Logger.Info().
+		Ctx(ctx).
+		Msg("All services health check passed")
 
 	// start event consumer and http server
 	var wg_event, wg_http sync.WaitGroup
 	
+	// Start Kafka Consumer
 	wg_event.Add(1)
 	go eventServer.Consumer(ctx, &wg_event)
-	
-	// start http server for metrics and health
-	wg_http.Add(1)
-	httpServer := server_http.NewHttpAppServer(&appServer,
-										  	   &appLogger,)
 
-	httpServer.StartHttpAppServer(ctx, 
-								  httpRouters,
-								  &wg_http,)
+	// Start web server (no blocking)
+	wg_http.Add(1)
+	httpServer.StartHttpAppServer(ctx, httpRouters, &wg_http)
 
 	wg_event.Wait()
 	wg_http.Wait()
