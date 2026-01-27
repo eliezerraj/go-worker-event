@@ -3,37 +3,30 @@ package service
 import (
 	"time"
 	"context"
-	"sync"
-	//"encoding/json"
 
 	"github.com/rs/zerolog"
 
 	"github.com/go-worker-event/shared/erro"
 	"github.com/go-worker-event/internal/domain/model"
 	"github.com/go-worker-event/internal/infrastructure/repo/database"
-	"github.com/go-worker-event/internal/infrastructure/adapter/event"
 
-	go_core_http 		"github.com/eliezerraj/go-core/v2/http"
+	"go.opentelemetry.io/otel/trace"
+
 	go_core_db_pg 		"github.com/eliezerraj/go-core/v2/database/postgre"
 	go_core_otel_trace 	"github.com/eliezerraj/go-core/v2/otel/trace"
 )
 
-var tracerProvider go_core_otel_trace.TracerProvider
-
 type WorkerService struct {
-	appServer			*model.AppServer
-	workerRepository	*database.WorkerRepository
+	workerRepository 	*database.WorkerRepository
 	logger 				*zerolog.Logger
-	workerEvent			*event.WorkerEvent
-	httpService			*go_core_http.HttpService
-	mutex    			sync.Mutex 	 	
+	tracerProvider 		*go_core_otel_trace.TracerProvider	
 }
 
 // About new worker service
-func NewWorkerService(appServer	*model.AppServer,
-					  workerRepository *database.WorkerRepository, 
-					  workerEvent	*event.WorkerEvent,
-					  appLogger *zerolog.Logger) *WorkerService {
+func NewWorkerService(	workerRepository *database.WorkerRepository, 
+						appLogger 		*zerolog.Logger,
+						tracerProvider 	*go_core_otel_trace.TracerProvider,
+						) *WorkerService {
 
 	logger := appLogger.With().
 						Str("package", "domain.service").
@@ -41,14 +34,10 @@ func NewWorkerService(appServer	*model.AppServer,
 	logger.Info().
 			Str("func","NewWorkerService").Send()
 
-	httpService := go_core_http.NewHttpService(&logger)					
-
 	return &WorkerService{
-		appServer: appServer,
 		workerRepository: workerRepository,
 		logger: &logger,
-		workerEvent: workerEvent,
-		httpService: httpService,
+		tracerProvider: tracerProvider,
 	}
 }
 
@@ -67,12 +56,14 @@ func (s * WorkerService) HealthCheck(ctx context.Context) error {
 			Ctx(ctx).
 			Str("func","HealthCheck").Send()
 
-	ctx, span := tracerProvider.SpanCtx(ctx, "service.HealthCheck")
+	ctx, span := s.tracerProvider.SpanCtx(ctx, "service.HealthCheck", trace.SpanKindServer)
 	defer span.End()
 
 	// Check database health
-	_, spanDB := tracerProvider.SpanCtx(ctx, "DatabasePG.Ping")
+	ctx, spanDB := s.tracerProvider.SpanCtx(ctx, "DatabasePG.Ping", trace.SpanKindInternal)
 	err := s.workerRepository.DatabasePG.Ping()
+	spanDB.End()
+
 	if err != nil {
 		s.logger.Error().
 				Ctx(ctx).
@@ -95,7 +86,7 @@ func (s *WorkerService) ClearanceReconciliacion(ctx context.Context, reconciliat
 			Ctx(ctx).
 			Str("func","ClearanceReconciliacion").Send()
 
-	ctx, span := tracerProvider.SpanCtx(ctx, "service.ClearanceReconciliacion")
+	ctx, span := s.tracerProvider.SpanCtx(ctx, "service.ClearanceReconciliacion", trace.SpanKindServer)
 	defer span.End()
 
 	// prepare database
@@ -119,8 +110,17 @@ func (s *WorkerService) ClearanceReconciliacion(ctx context.Context, reconciliat
 	now := time.Now()
 	reconciliation.CreatedAt = now
 	reconciliation.Type = "ORDER"
-	reconciliation.Currency	= "BRL"
 	reconciliation.Amount = reconciliation.Payment.Amount - reconciliation.Order.Amount		   
+	
+	if reconciliation.Payment.Currency	== "" {
+		err = erro.ErrCurrencyRequired
+		s.logger.Error().
+				Ctx(ctx).
+				Err(err).Send()
+		return err
+	}
+
+	reconciliation.Currency = reconciliation.Payment.Currency
 	
 	// Create payment
 	_, err = s.workerRepository.ClearanceReconciliacion(ctx, tx, reconciliation)

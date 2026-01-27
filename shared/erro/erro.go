@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	ErrCurrencyRequired = errors.New("payment currency is required")
 	ErrNotFound 		= errors.New("item not found")
 	ErrBadRequest 		= errors.New("bad request! check parameters")
 	ErrUpdate			= errors.New("update unsuccessful")

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace"
 
 	go_core_otel_trace "github.com/eliezerraj/go-core/v2/otel/trace"
 	go_core_event "github.com/eliezerraj/go-core/v2/event/kafka"
@@ -64,7 +65,7 @@ func (w *WorkerEvent) DestroyWorkerEventProducerTx(ctx context.Context) (error) 
 			Str("func","DestroyWorkerEventProducerTx").Send()
 
 	//trace
-	ctx, span := tracerProvider.SpanCtx(ctx, "adapter.event.DestroyWorkerEventProducerTx")
+	ctx, span := tracerProvider.SpanCtx(ctx, "adapter.DestroyWorkerEventProducerTx", trace.SpanKindServer)
 	defer span.End()
 
 	w.ProducerWorker.Close()	

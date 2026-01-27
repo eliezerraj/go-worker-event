@@ -1,58 +1,38 @@
 package server
 
 import(
+	"time"
 	"sync"
 	"context"
 	"encoding/json"
-	"github.com/google/uuid"
 
 	"github.com/rs/zerolog"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 
 	go_core_event "github.com/eliezerraj/go-core/v2/event/kafka" 
 	go_core_otel_trace 	"github.com/eliezerraj/go-core/v2/otel/trace"
+	go_core_middleware "github.com/eliezerraj/go-core/v2/middleware"
 
 	"github.com/go-worker-event/internal/domain/model"
 	"github.com/go-worker-event/internal/domain/service"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel"
 )
 
-var appTracerProvider 	go_core_otel_trace.TracerProvider
-
 type EventAppServer struct {
-	appServer		*model.AppServer
-	consumerWorker 	*go_core_event.ConsumerWorker
-	workerService	*service.WorkerService
-	logger			*zerolog.Logger
-}
-
-// Set a trace-i inside the context
-func (e *EventAppServer) setContextTraceId(ctx context.Context, trace_id string) context.Context {
-	e.logger.Info().
-			Ctx(ctx).
-			Str("func","setContextTraceId").Send()
-
-	var traceUUID string
-
-	if trace_id == "" {
-		traceUUID = uuid.New().String()
-		trace_id = traceUUID
-		
-		e.logger.Info().
-			Ctx(ctx).
-			Str("func","setContextTraceId").
-			Msg("Create a new trace_id !!!")
-	}
-
-	ctx = context.WithValue(ctx, "request-id",  trace_id  )
-	return ctx
+	appServer			*model.AppServer
+	consumerWorker 		*go_core_event.ConsumerWorker
+	workerService		*service.WorkerService
+	logger 				*zerolog.Logger
+	tracerProvider 		*go_core_otel_trace.TracerProvider	
 }
 
 // About create a consumer worker event
 func NewEventAppServer(	appServer *model.AppServer,
 						workerService *service.WorkerService,
-						appLogger *zerolog.Logger) (*EventAppServer, error) {
+						appLogger *zerolog.Logger,
+						tracerProvider *go_core_otel_trace.TracerProvider) (*EventAppServer, error) {
 	logger := appLogger.With().
 						Str("package", "infrastructure.server").
 						Logger()
@@ -73,6 +53,7 @@ func NewEventAppServer(	appServer *model.AppServer,
 		workerService: workerService,
 		consumerWorker: consumerWorker,
 		logger: &logger,
+		tracerProvider: tracerProvider,
 	}, nil
 }
 
@@ -83,100 +64,127 @@ func (e *EventAppServer) Consumer(ctx context.Context,
 			 Ctx(ctx).
 			 Str("func","Consumer").Send()
 
-	// cancel everything		
+	// Ensure WaitGroup is marked done when this goroutine exits and log on exit
+	defer wg.Done()
 	defer func() {
 		e.logger.Info().
-				Ctx(ctx).
-				Msg("Exiting consumer KAFKA SUCCESSFULL")
-		
-			 defer wg.Done()
+			Ctx(ctx).
+			Msg("Exiting consumer KAFKA SUCCESSFULL")
 	}()
 
 	messages := make(chan go_core_event.Message)
 
-	go e.consumerWorker.Consumer(e.appServer.Topics, messages)
-	var tracerProvider 	go_core_otel_trace.TracerProvider
-
+	go e.consumerWorker.Consumer(*e.appServer.Topics, messages)
+	
 	for msg := range messages {
 
-		e.logger.Info().Msg("=============== BEGIN - MSG FROM KAFKA - BEGIN =============")
+		e.logger.Info().Msg("=============== BEGIN - KAFKA CONSUMER- BEGIN =============")
 		e.logger.Info().Interface("msg", msg).Send()
-		e.logger.Info().Msg("=============== END - MSG FROM KAFKA - END ==================")
+		e.logger.Info().Msg("=============== END - KAFKA CONSUMER-- END ==================")
 
 		// otel trace
 		kafkaHeaderCarrier := KafkaHeaderCarrier{}
 		kafkaHeaders := kafkaHeaderCarrier.MapToKafkaHeaders(*msg.Header)
-		appCarrier := KafkaHeaderCarrier{Headers: &kafkaHeaders }
+		appCarrier := KafkaHeaderCarrier{Headers: &kafkaHeaders}
 
-		// Extract all headers from appCarrier and add to context
-		allKeys := appCarrier.Keys()
-		for _, key := range allKeys {
-			value := appCarrier.Get(key)
-			ctx = context.WithValue(ctx, key, value)
-		}
+		// Process each message in its own scope so per-message defers run immediately
+		func() {
+			msgCtx := ctx
 
-		ctx := otel.GetTextMapPropagator().Extract(ctx, appCarrier)
-		ctx, span := tracerProvider.SpanCtx(ctx, 
-								  			e.appServer.Application.Name)
+			// Extract all headers from appCarrier and add to context (do not mutate outer ctx)
+			for _, key := range appCarrier.Keys() {
+				value := appCarrier.Get(key)
 
-		// Decode payload
-		event := model.Event{}
-		errUnMarshall := json.Unmarshal([]byte(msg.Payload), &event)
-		if errUnMarshall != nil {
-			e.logger.Error().
-					 Ctx(ctx).
-					 Err(errUnMarshall).Send()
-			continue
-		}
-
-		// call service
-		var err error
-		if event.Type == "cleareance.order" {
-			
-			// convert interface to bytes
-			paymentBytes, errUnMarshall := json.Marshal(event.EventData)
-			if errUnMarshall != nil {
-				e.logger.Error().
-						Ctx(ctx).
-						Err(errUnMarshall).Send()
-				continue
+				switch key {
+				case string(go_core_middleware.RequestIDKey):
+					msgCtx = context.WithValue(msgCtx, go_core_middleware.RequestIDKey, value)
+				default:
+					msgCtx = context.WithValue(msgCtx, key, value) // optional
+				}
 			}
 
-			// convert bytes to struct
-			payment := model.Payment{}
-			errUnMarshall = json.Unmarshal(paymentBytes, &payment)
-			if errUnMarshall != nil {
-				e.logger.Error().
-						Ctx(ctx).
-						Err(errUnMarshall).Send()
-				continue
+			// per-message timeout (use configured value if available)
+			timeoutSec := e.appServer.Server.CtxTimeout
+			if e.appServer != nil && e.appServer.Server.CtxTimeout > 0 {
+				timeoutSec = e.appServer.Server.CtxTimeout
 			}
 
-			reconciliation := model.Reconciliation{ Transaction: payment.Transaction,
-													Type: "RECONCILIATION:RECEIVED",
-													Payment: &payment,
-													Order: payment.Order }	
+			msgCtx, cancel := context.WithTimeout(msgCtx, time.Duration(timeoutSec)*time.Second)
+			defer cancel()
 
-			e.logger.Info().
-					 Ctx(ctx).
-					 Interface("reconciliation",reconciliation).Send()
+			msgCtx = otel.GetTextMapPropagator().Extract(msgCtx, appCarrier)
 
-			err = e.workerService.ClearanceReconciliacion(ctx, &reconciliation)
-			if err != nil {
+			msgCtx, span := e.tracerProvider.SpanCtx(msgCtx, e.appServer.Application.Name, trace.SpanKindConsumer)
+			defer span.End()
+
+			// Decode payload
+			event := model.Event{}
+			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
 				e.logger.Error().
-						Ctx(ctx).
+					Ctx(msgCtx).
+					Err(err).Send()
+				return
+			}
+
+			// call service
+			if event.Type == "cleareance.order" {
+				// convert interface to bytes
+				paymentBytes, err := json.Marshal(event.EventData)
+				if err != nil {
+					e.logger.Error().
+						Ctx(msgCtx).
 						Err(err).Send()
-				continue
+					return
+				}
+
+				// convert bytes to struct
+				payment := model.Payment{}
+				if err := json.Unmarshal(paymentBytes, &payment); err != nil {
+					e.logger.Error().
+						Ctx(msgCtx).
+						Err(err).Send()
+					return
+				}
+
+				reconciliation := model.Reconciliation{
+					Transaction: payment.Transaction,
+					Type:        "RECONCILIATION:RECEIVED",
+					Payment:     &payment,
+					Order:       payment.Order,
+				}
+
+				e.logger.Info().
+					Ctx(msgCtx).
+					Interface("reconciliation", reconciliation).Send()
+
+				if err := e.workerService.ClearanceReconciliacion(msgCtx, &reconciliation); err != nil {
+					e.logger.Error().
+						Ctx(msgCtx).
+						Err(err).Send()
+					return
+				}
 			}
-		}
 
-		// commit transaction
-		e.consumerWorker.Commit()
-		e.logger.Info().
-				Ctx(ctx).
-				Msg("KAFKA CONSUMER COMMIT SUCCESSFUL !!!")
-
-		span.End()
+			// commit transaction only on success (commit specific message)
+			if msg.Raw != nil {
+				if err := e.consumerWorker.CommitMessage(msg.Raw); err != nil {
+					e.logger.Error().
+						Ctx(msgCtx).
+						Err(err).
+						Msg("KAFKA CONSUMER COMMIT FAILED")
+				} else {
+					e.logger.Info().
+						Ctx(msgCtx).
+						Msg("KAFKA CONSUMER COMMIT SUCCESSFUL !!!")
+				}
+			} else {
+				// fallback to generic commit if raw message not available
+				e.consumerWorker.Commit()
+				e.logger.Info().
+					Ctx(msgCtx).
+					Msg("KAFKA CONSUMER COMMIT SUCCESSFUL (fallback) !!!")
+			}
+		}()
 	}
 }
 

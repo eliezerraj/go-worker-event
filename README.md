@@ -6,6 +6,15 @@
 
    Despite the workload is a event driven there is 2 http endpoints exposed just for observability purpose (metrics). 
 
+   Create a work space (root)
+   
+    go work init ./cmd ../go-core
+
+   Add module (inside /cmd)
+   
+    go work use ..
+
+
 ## Sequence Diagram
 
 ![alt text](worker_event.png)
@@ -69,13 +78,23 @@ Errors: Structured error handling with custom error types
     KAFKA_PROTOCOL=SASL_SSL
     KAFKA_MECHANISM=SCRAM-SHA-512
     KAFKA_CLIENT_ID=GO-WORKER-EVENT-LOCAL
-    KAFKA_BROKER_1=b-1.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
-    KAFKA_BROKER_2=b-3.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
-    KAFKA_BROKER_3=b-2.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096
     KAFKA_PARTITION=3
     KAFKA_REPLICATION=1
     KAFKA_GROUP_ID=GROUP-WORKER-EVENT-LOCAL
     TOPIC_EVENT=topic.clearance.local
+    
+    #KAFKA_PROTOCOL=SASL_SSL
+    #KAFKA_MECHANISM=SCRAM-SHA-512
+    #KAFKA_BROKER_1=b-1.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
+    #KAFKA_BROKER_2=b-3.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
+    #KAFKA_BROKER_3=b-2.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
+
+    # Change from PLAINTEXT to SASL_PLAINTEXT to enable authentication
+    KAFKA_PROTOCOL=SASL_PLAINTEXT
+    KAFKA_MECHANISM=PLAIN
+    KAFKA_BROKER_1=localhost:9092
+    KAFKA_BROKER_2=localhost:9092
+    KAFKA_BROKER_3=localhost:9092
 
 ## Table
 
