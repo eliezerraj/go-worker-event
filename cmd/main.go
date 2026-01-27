@@ -13,7 +13,6 @@ import(
 	"github.com/go-worker-event/shared/log"
 	"github.com/go-worker-event/internal/domain/model"
 	"github.com/go-worker-event/internal/infrastructure/adapter/http"
-	//"github.com/go-worker-event/internal/infrastructure/adapter/event"
 	"github.com/go-worker-event/internal/infrastructure/server"
 	"github.com/go-worker-event/internal/infrastructure/server/server_http"
 	"github.com/go-worker-event/internal/infrastructure/config"
@@ -49,13 +48,14 @@ func init(){
 	writers := []io.Writer{os.Stdout}
 
 	if application.StdOutLogGroup {
-		file, err := os.OpenFile(application.LogGroup, 
-								os.O_APPEND|os.O_CREATE|os.O_WRONLY, 
-								0644)
+		file, err := os.OpenFile(application.LogGroup,
+						os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+						0644)
 		if err != nil {
-			panic(fmt.Sprintf("FAILED to open log file: %v", err))
+			fmt.Fprintf(os.Stderr, "WARNING: failed to open log file '%s': %v\n", application.LogGroup, err)
+		} else {
+			writers = append(writers, file)
 		}
-		writers = append(writers, file)
 	} 
 	multiWriter := io.MultiWriter(writers...)
 

@@ -110,8 +110,17 @@ func (s *WorkerService) ClearanceReconciliacion(ctx context.Context, reconciliat
 	now := time.Now()
 	reconciliation.CreatedAt = now
 	reconciliation.Type = "ORDER"
-	reconciliation.Currency	= "BRL"
 	reconciliation.Amount = reconciliation.Payment.Amount - reconciliation.Order.Amount		   
+	
+	if reconciliation.Payment.Currency	== "" {
+		err = erro.ErrCurrencyRequired
+		s.logger.Error().
+				Ctx(ctx).
+				Err(err).Send()
+		return err
+	}
+
+	reconciliation.Currency = reconciliation.Payment.Currency
 	
 	// Create payment
 	_, err = s.workerRepository.ClearanceReconciliacion(ctx, tx, reconciliation)
