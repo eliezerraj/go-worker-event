@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/go-worker-event/internal/domain/model"
 
@@ -29,7 +30,7 @@ func NewWorkerRepository(databasePG *go_core_db_pg.DatabasePGServer,
 						Str("package", "repo.database").
 						Logger()
 	logger.Info().
-			Str("func","NewWorkerRepository").Send()
+		Str("func","NewWorkerRepository").Send()
 
 	return &WorkerRepository{
 		DatabasePG: databasePG,
@@ -41,8 +42,8 @@ func NewWorkerRepository(databasePG *go_core_db_pg.DatabasePGServer,
 // Above get stats from database
 func (w *WorkerRepository) Stat(ctx context.Context) (go_core_db_pg.PoolStats){
 	w.logger.Info().
-			Ctx(ctx).
-			Str("func","Stat").Send()
+		Ctx(ctx).
+		Str("func","Stat").Send()
 	
 	stats := w.DatabasePG.Stat()
 
@@ -65,8 +66,8 @@ func (w* WorkerRepository) ClearanceReconciliacion(ctx context.Context,
 													tx pgx.Tx, 
 													reconciliation *model.Reconciliation) (*model.Reconciliation, error){
 	w.logger.Info().
-			Ctx(ctx).
-			Str("func","ClearanceReconciliacion").Send()
+		Ctx(ctx).
+		Str("func","ClearanceReconciliacion").Send()
 			
 	// trace
 	ctx, span := w.tracerProvider.SpanCtx(ctx, "database.ClearanceReconciliacion", trace.SpanKindInternal)
@@ -113,9 +114,11 @@ func (w* WorkerRepository) ClearanceReconciliacion(ctx context.Context,
 						reconciliation.CreatedAt)
 						
 	if err := row.Scan(&id); err != nil {
+		span.RecordError(err) 
+        span.SetStatus(codes.Error, err.Error())
 		w.logger.Error().
-				Ctx(ctx).
-				Err(err).Send()
+			Ctx(ctx).
+			Err(err).Send()
 		return nil, fmt.Errorf("FAILED to scan reconciliation ID: %w", err)
 	}
 
