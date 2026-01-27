@@ -11,7 +11,8 @@ import (
 	"github.com/go-worker-event/internal/infrastructure/repo/database"
 
 	"go.opentelemetry.io/otel/trace"
-
+	"go.opentelemetry.io/otel/codes"
+	
 	go_core_db_pg 		"github.com/eliezerraj/go-core/v2/database/postgre"
 	go_core_otel_trace 	"github.com/eliezerraj/go-core/v2/otel/trace"
 )
@@ -32,7 +33,7 @@ func NewWorkerService(	workerRepository *database.WorkerRepository,
 						Str("package", "domain.service").
 						Logger()
 	logger.Info().
-			Str("func","NewWorkerService").Send()
+		Str("func","NewWorkerService").Send()
 
 	return &WorkerService{
 		workerRepository: workerRepository,
@@ -44,8 +45,8 @@ func NewWorkerService(	workerRepository *database.WorkerRepository,
 // About database stats
 func (s *WorkerService) Stat(ctx context.Context) (go_core_db_pg.PoolStats){
 	s.logger.Info().
-			Ctx(ctx).
-			Str("func","Stat").Send()
+		Ctx(ctx).
+		Str("func","Stat").Send()
 
 	return s.workerRepository.Stat(ctx)
 }
@@ -53,8 +54,8 @@ func (s *WorkerService) Stat(ctx context.Context) (go_core_db_pg.PoolStats){
 // About check health service
 func (s * WorkerService) HealthCheck(ctx context.Context) error {
 	s.logger.Info().
-			Ctx(ctx).
-			Str("func","HealthCheck").Send()
+		Ctx(ctx).
+		Str("func","HealthCheck").Send()
 
 	ctx, span := s.tracerProvider.SpanCtx(ctx, "service.HealthCheck", trace.SpanKindServer)
 	defer span.End()
@@ -65,17 +66,18 @@ func (s * WorkerService) HealthCheck(ctx context.Context) error {
 	spanDB.End()
 
 	if err != nil {
+		span.RecordError(err) 
+        span.SetStatus(codes.Error, err.Error())
 		s.logger.Error().
-				Ctx(ctx).
-				Err(err).Msg("*** Database HEALTH FAILED ***")
+			Ctx(ctx).
+			Err(err).Msg("*** Database HEALTH FAILED ***")
 		return erro.ErrHealthCheck
 	}
 	spanDB.End()
 
 	s.logger.Info().
-			Ctx(ctx).
-			Str("func","HealthCheck").
-			Msg("*** Database HEALTH SUCCESSFULL ***")
+		Ctx(ctx).
+		Msg("*** Database HEALTH SUCCESSFULL ***")
 
 	return nil
 }
@@ -83,8 +85,8 @@ func (s * WorkerService) HealthCheck(ctx context.Context) error {
 func (s *WorkerService) ClearanceReconciliacion(ctx context.Context, reconciliation *model.Reconciliation) error {
 	// trace and log
 	s.logger.Info().
-			Ctx(ctx).
-			Str("func","ClearanceReconciliacion").Send()
+		Ctx(ctx).
+		Str("func","ClearanceReconciliacion").Send()
 
 	ctx, span := s.tracerProvider.SpanCtx(ctx, "service.ClearanceReconciliacion", trace.SpanKindServer)
 	defer span.End()
@@ -92,6 +94,8 @@ func (s *WorkerService) ClearanceReconciliacion(ctx context.Context, reconciliat
 	// prepare database
 	tx, conn, err := s.workerRepository.DatabasePG.StartTx(ctx)
 	if err != nil {
+		span.RecordError(err) 
+        span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -114,9 +118,11 @@ func (s *WorkerService) ClearanceReconciliacion(ctx context.Context, reconciliat
 	
 	if reconciliation.Payment.Currency	== "" {
 		err = erro.ErrCurrencyRequired
+		span.RecordError(err) 
+        span.SetStatus(codes.Error, err.Error())
 		s.logger.Error().
-				Ctx(ctx).
-				Err(err).Send()
+			Ctx(ctx).
+			Err(err).Send()
 		return err
 	}
 
