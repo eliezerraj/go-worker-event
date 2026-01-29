@@ -80,11 +80,6 @@ func (cl *ConfigLoader) LoadAll() (*AllConfig, error) {
 		return nil, fmt.Errorf("FAILED to load OTEL config: %w", err)
 	}
 
-	endpoints, err := cl.loadEndpoints()
-	if err != nil {
-		cl.logger.Warn().Err(err).Msg("FAILED to load endpoint config, continuing without endpoints")
-	}
-
 	topics, err := cl.loadTopics()
 	if err != nil {
 		cl.logger.Warn().Err(err).Msg("FAILED to load topics config, continuing without topics")
@@ -101,7 +96,6 @@ func (cl *ConfigLoader) LoadAll() (*AllConfig, error) {
 		Database:    database,
 		OtelTrace:   otel,
 		Kafka:       kafka,
-		Endpoints:   endpoints,
 		Topics:      topics,
 	}, nil
 }
