@@ -6,7 +6,7 @@ metadata:
   labels:
     app: *app-name
 data:
-  VERSION: "1.0"
+  VERSION: "1.2"
   ACCOUNT: "aws:908671954593"
   APP_NAME: "go-worker-event.arch-eks-01-02"
   PORT: "7007"
