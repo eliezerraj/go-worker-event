@@ -57,6 +57,7 @@ Errors: Structured error handling with custom error types
     ENV=dev
 
     DB_HOST= 127.0.0.1 
+    #DB_HOST=rds-proxy-db-arch.proxy-couoacqalfwt.us-east-2.rds.amazonaws.com
     DB_PORT=5432
     DB_NAME=postgres
     DB_MAX_CONNECTION=30
@@ -75,19 +76,19 @@ Errors: Structured error handling with custom error types
 
     KAFKA_USER=admin
     KAFKA_PASSWORD=admin
-    KAFKA_PROTOCOL=SASL_SSL
-    KAFKA_MECHANISM=SCRAM-SHA-512
+    KAFKA_PROTOCOL= SASL_PLAINTEXT #SASL_SSL
+    KAFKA_MECHANISM= PLAIN #SCRAM-SHA-512
     KAFKA_CLIENT_ID=GO-WORKER-EVENT-LOCAL
     KAFKA_PARTITION=3
     KAFKA_REPLICATION=1
     KAFKA_GROUP_ID=GROUP-WORKER-EVENT-LOCAL
-    TOPIC_EVENT=topic.clearance.local
-    
+    TOPIC_EVENT_00=topic.clearance.local
+
     #KAFKA_PROTOCOL=SASL_SSL
     #KAFKA_MECHANISM=SCRAM-SHA-512
     #KAFKA_BROKER_1=b-1.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
     #KAFKA_BROKER_2=b-3.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
-    #KAFKA_BROKER_3=b-2.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
+    3KAFKA_BROKER_3=b-2.mskarch01.x25pj7.c3.kafka.us-east-2.amazonaws.com:9096 
 
     # Change from PLAINTEXT to SASL_PLAINTEXT to enable authentication
     KAFKA_PROTOCOL=SASL_PLAINTEXT
