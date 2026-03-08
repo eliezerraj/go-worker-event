@@ -313,7 +313,8 @@ func (cl *ConfigLoader) loadTopics() (*[]string, error) {
 	}
 
 	if len(topics) == 0 {
-		cl.logger.Warn().Msg("No topics configurations found in environment")
+		cl.logger.Error().Msg("ERROR **** No topics configurations found in environment !!! **** ")
+		panic("No topics configurations found in environment, application cannot start without topics")
 	}
 
 	cl.logger.Info().
