@@ -261,6 +261,9 @@ func main() {
 		initLogger.Fatal().
 			Err(err).
 			Msg("FAILED to initialize kafka consumer")
+	} else {
+		appCtx.Logger.Info().
+			Msg("Kafka consumer initialization SUCCESSFUL !!!!!")
 	}
 
 	// Health check all dependencies
