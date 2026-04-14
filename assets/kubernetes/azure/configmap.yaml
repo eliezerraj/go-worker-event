@@ -6,7 +6,7 @@ metadata:
   labels:
     app: *app-name
 data:
-  VERSION: "1.5"
+  VERSION: "1.6"
   ACCOUNT: "az:e5240c8f-ec4f-4bd4-a36e-1981d27dd8e1"
   APP_NAME: "go-worker-event.az1d-aks-architecture"
   PORT: "7007"
