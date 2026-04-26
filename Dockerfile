@@ -1,6 +1,6 @@
 #docker build -t go-worker-event .
 
-FROM golang:1.24 As builder
+FROM golang:1.24 AS builder
 
 RUN apt-get update && apt-get install bash && apt-get install -y --no-install-recommends ca-certificates
 
