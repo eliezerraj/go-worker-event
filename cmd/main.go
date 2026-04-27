@@ -27,8 +27,6 @@ import(
 	"go.opentelemetry.io/otel/propagation"
 )
 
-// Global variables
-
 // AppContext holds all application dependencies and state
 type AppContext struct {
 	Logger           zerolog.Logger
